@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0D3321" />
+  <title>Reilly's Guns — Sign Tracker</title>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <!-- App Styles -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ============================================================
+     TOAST NOTIFICATIONS
+     ============================================================ -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ============================================================
+     LOADING OVERLAY
+     ============================================================ -->
+<div class="loading-overlay" id="loading-overlay" style="display:none;">
+  <div class="spinner"></div>
+  <span>Loading...</span>
+</div>
+
+<!-- ============================================================
+     CONFIRM MODAL
+     ============================================================ -->
+<div class="modal-overlay hidden" id="confirm-modal">
+  <div class="modal-box">
+    <h3 class="modal-title" id="confirm-title">Are you sure?</h3>
+    <p class="modal-message" id="confirm-message"></p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="handleConfirmCancel()">Cancel</button>
+      <button class="btn btn-danger"    onclick="handleConfirmOk()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     APP SHELL
+     ============================================================ -->
+<div id="app">
+
+  <!-- ====== LOGIN SCREEN ====== -->
+  <div id="login-screen" class="screen active" style="display:flex;">
+    <div class="login-brand">
+      <div class="brand-badge">
+        <i class="fas fa-crosshairs"></i>
+      </div>
+      <h1>Reilly's Guns</h1>
+      <div class="brand-border">◆</div>
+      <h2>Sign Tracker</h2>
+      <p class="tagline">Inherited Firearms Specialists · (856) 447-3030</p>
+    </div>
+
+    <div class="login-card">
+      <h3><i class="fas fa-lock" style="color:var(--gold);margin-right:7px"></i>Field Login</h3>
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input id="login-email" type="email" class="form-input" placeholder="you@reillysguns.com" autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input id="login-password" type="password" class="form-input" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" style="margin-top:6px">
+          <i class="fas fa-sign-in-alt"></i> Sign In
+        </button>
+      </form>
+      <p style="text-align:center;margin-top:14px;font-size:0.78rem;color:var(--text-light)">
+        Demo: <strong>admin@reillysguns.com</strong> / admin123<br>
+        or <strong>field@reillysguns.com</strong> / field123
+      </p>
+    </div>
+
+    <p style="color:var(--gold-pale);font-size:0.72rem;margin-top:24px;opacity:0.6;text-align:center;">
+      © Reilly's Guns · All Rights Reserved
+    </p>
+  </div>
+
+  <!-- ====== DASHBOARD SCREEN ====== -->
+  <div id="dashboard-screen" class="screen">
+    <div class="screen-header">
+      <h1>
+        <i class="fas fa-crosshairs" style="color:var(--gold)"></i>
+        Reilly's Guns
+      </h1>
+      <div class="sub">Sign Tracker Dashboard · (856) 447-3030</div>
+    </div>
+    <div class="dashboard-content">
+      <!-- Stats -->
+      <div class="stat-grid">
+        <div class="stat-card active-card">
+          <div class="stat-number" id="dash-active-count">0</div>
+          <div class="stat-label">Active</div>
+        </div>
+        <div class="stat-card removed-card">
+          <div class="stat-number" id="dash-removed-count">0</div>
+          <div class="stat-label">Removed</div>
+        </div>
+        <div class="stat-card total-card">
+          <div class="stat-number" id="dash-total-count">0</div>
+          <div class="stat-label">Total</div>
+        </div>
+      </div>
+
+      <!-- By type -->
+      <div>
+        <div class="section-title"><i class="fas fa-tag"></i> By Sign Type (Active)</div>
+        <div class="type-breakdown" id="type-breakdown"></div>
+      </div>
+
+      <!-- Quick actions -->
+      <div>
+        <div class="section-title"><i class="fas fa-bolt"></i> Quick Actions</div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-gold" style="flex:1" onclick="openAddSign()">
+            <i class="fas fa-plus"></i> Add Sign
+          </button>
+          <button class="btn btn-secondary" style="flex:1" onclick="showScreen('map')">
+            <i class="fas fa-map"></i> View Map
+          </button>
+        </div>
+      </div>
+
+      <!-- Recent -->
+      <div>
+        <div class="section-title"><i class="fas fa-clock"></i> Recently Added</div>
+        <div class="recent-list" id="recent-list"></div>
+      </div>
+
+      <!-- Logout -->
+      <button class="btn btn-secondary" onclick="handleLogout()" style="margin-top:4px">
+        <i class="fas fa-sign-out-alt"></i> Sign Out
+      </button>
+    </div>
+  </div>
+
+  <!-- ====== MAP SCREEN ====== -->
+  <div id="map-screen" class="screen">
+    <div id="leaflet-map"></div>
+    <div class="map-legend">
+      <p>Legend</p>
+      <div class="legend-item"><div class="legend-dot" style="background:#0D3321;border:2px solid #A2752A"></div><span class="legend-label">Active</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#8b1a1a;border:2px solid #cc4444"></div><span class="legend-label">Removed</span></div>
+    </div>
+    <button class="fab map-fab" onclick="openAddSign()" title="Add Sign">
+      <i class="fas fa-plus"></i>
+    </button>
+  </div>
+
+  <!-- ====== LIST SCREEN ====== -->
+  <div id="list-screen" class="screen">
+    <div class="screen-header">
+      <h1><i class="fas fa-list" style="color:var(--gold)"></i> All Signs</h1>
+    </div>
+    <div class="list-filters">
+      <button class="filter-chip active" data-filter="all"     onclick="loadList('all')">All</button>
+      <button class="filter-chip"        data-filter="active"  onclick="loadList('active')">Active</button>
+      <button class="filter-chip"        data-filter="removed" onclick="loadList('removed')">Removed</button>
+    </div>
+    <div class="sign-list" id="sign-list"></div>
+    <button class="fab" onclick="openAddSign()" title="Add Sign"><i class="fas fa-plus"></i></button>
+  </div>
+
+  <!-- ====== ADD SIGN SCREEN ====== -->
+  <div id="add-screen" class="screen">
+    <div class="screen-header">
+      <h1><i class="fas fa-map-marker-alt" style="color:var(--gold)"></i> Add New Sign</h1>
+    </div>
+    <form id="add-form" class="add-form" onsubmit="handleAddSign(event)">
+
+      <!-- Photo -->
+      <div class="form-section">
+        <div class="form-section-title"><i class="fas fa-camera"></i> Sign Photo</div>
+        <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoSelect(this)" />
+        <div id="add-photo-zone" class="photo-upload-zone" onclick="triggerPhotoInput()">
+          <i class="fas fa-camera"></i>
+          <p>Tap to take a photo or upload</p>
+          <p style="font-size:0.75rem;margin-top:4px;opacity:0.7">Photo is required</p>
+        </div>
+        <div id="add-photo-preview" style="display:none">
+          <div class="photo-preview-wrap">
+            <img id="add-photo-img" src="" alt="Preview" />
+            <button type="button" class="change-photo-btn" id="change-photo-btn" style="display:none" onclick="triggerPhotoInput()">
+              <i class="fas fa-redo"></i> Change
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Location -->
+      <div class="form-section">
+        <div class="form-section-title"><i class="fas fa-map-pin"></i> Location</div>
+        <div class="form-group">
+          <label class="form-label">GPS Coordinates</label>
+          <div class="gps-row">
+            <div class="gps-status" id="gps-status">
+              <i class="fas fa-map-marker-alt"></i> Tap button to capture GPS
+            </div>
+            <button type="button" id="gps-btn" class="btn btn-secondary" onclick="captureGPS()" style="flex-shrink:0;white-space:nowrap">
+              <i class="fas fa-crosshairs"></i> Capture GPS
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Street Address *</label>
+          <input id="add-address" type="text" class="form-input" placeholder="Auto-filled from GPS or enter manually" />
+          <p class="form-hint">GPS auto-fills this. You can edit if needed.</p>
+        </div>
+      </div>
+
+      <!-- Sign Details -->
+      <div class="form-section">
+        <div class="form-section-title"><i class="fas fa-tag"></i> Sign Details</div>
+        <div class="form-group">
+          <label class="form-label">Sign Type *</label>
+          <select id="add-sign-type" class="form-select"></select>
+        </div>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label">Date Installed</label>
+            <input id="add-date" type="date" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Installer Name</label>
+            <input id="add-installer" type="text" class="form-input" placeholder="Optional" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea id="add-notes" class="form-textarea" placeholder="Optional notes about location, condition, etc."></textarea>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full" style="margin-bottom:8px">
+        <i class="fas fa-save"></i> Save Sign
+      </button>
+      <button type="button" class="btn btn-secondary btn-full" onclick="showScreen('dashboard')">
+        <i class="fas fa-times"></i> Cancel
+      </button>
+    </form>
+  </div>
+
+  <!-- ====== DETAIL SCREEN ====== -->
+  <div id="detail-screen" class="screen">
+    <div class="screen-header">
+      <h1>
+        <i class="fas fa-map-marker-alt" style="color:var(--gold)"></i> Sign Details
+        <span id="detail-status-badge" class="status-badge" style="margin-left:auto"></span>
+      </h1>
+    </div>
+    <img id="detail-photo" class="detail-photo" src="" alt="Sign Photo" onerror="this.src='https://placehold.co/600x300/0D3321/A2752A?text=No+Photo'" />
+    <div class="detail-content">
+      <div class="detail-card">
+        <h3><i class="fas fa-info-circle" style="color:var(--gold);margin-right:6px"></i>Sign Information</h3>
+        <div class="detail-row">
+          <div class="detail-icon"><i class="fas fa-map-marker-alt"></i></div>
+          <div class="detail-field"><label>Address</label><span id="detail-address"></span></div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-icon"><i class="fas fa-tag"></i></div>
+          <div class="detail-field"><label>Sign Type</label><span id="detail-type"></span></div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-icon"><i class="fas fa-calendar"></i></div>
+          <div class="detail-field"><label>Date Installed</label><span id="detail-date"></span></div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-icon"><i class="fas fa-crosshairs"></i></div>
+          <div class="detail-field"><label>GPS Coordinates</label><span id="detail-coords"></span></div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-icon"><i class="fas fa-user"></i></div>
+          <div class="detail-field"><label>Installed By</label><span id="detail-installed-by"></span></div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-icon"><i class="fas fa-sticky-note"></i></div>
+          <div class="detail-field"><label>Notes</label><span id="detail-notes"></span></div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-icon"><i class="fas fa-clock"></i></div>
+          <div class="detail-field"><label>Created</label><span id="detail-created"></span></div>
+        </div>
+      </div>
+
+      <!-- Mini map -->
+      <div class="detail-card" style="padding:0;overflow:hidden">
+        <div id="detail-mini-map" class="detail-map"></div>
+      </div>
+    </div>
+
+    <div class="detail-actions">
+      <button class="btn btn-secondary btn-full" onclick="openEditSign()">
+        <i class="fas fa-edit"></i> Edit Sign
+      </button>
+      <button id="detail-mark-btn" class="btn btn-danger btn-full" onclick="toggleSignStatus()">
+        <i class="fas fa-times-circle"></i> Mark as Removed
+      </button>
+      <button id="detail-delete-btn" class="btn btn-danger btn-full" onclick="deleteSign()" style="display:none">
+        <i class="fas fa-trash"></i> Delete Permanently
+      </button>
+      <button class="btn btn-secondary btn-full" onclick="showScreen('list')">
+        <i class="fas fa-arrow-left"></i> Back to List
+      </button>
+    </div>
+  </div>
+
+  <!-- ====== EDIT SCREEN ====== -->
+  <div id="edit-screen" class="screen">
+    <div class="screen-header">
+      <h1><i class="fas fa-edit" style="color:var(--gold)"></i> Edit Sign</h1>
+    </div>
+    <form id="edit-form" class="add-form" onsubmit="handleEditSign(event)">
+
+      <!-- Photo -->
+      <div class="form-section">
+        <div class="form-section-title"><i class="fas fa-camera"></i> Sign Photo</div>
+        <input type="file" id="edit-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleEditPhotoSelect(this)" />
+        <div id="edit-photo-zone" class="photo-upload-zone" onclick="document.getElementById('edit-photo-input').click()">
+          <i class="fas fa-camera"></i>
+          <p>Tap to take or upload a new photo</p>
+        </div>
+        <div id="edit-photo-preview" style="display:none">
+          <div class="photo-preview-wrap">
+            <img id="edit-photo-img" src="" alt="Preview" />
+            <button type="button" class="change-photo-btn" id="edit-change-photo-btn" style="display:none" onclick="document.getElementById('edit-photo-input').click()">
+              <i class="fas fa-redo"></i> Change
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Location -->
+      <div class="form-section">
+        <div class="form-section-title"><i class="fas fa-map-pin"></i> Location</div>
+        <div class="form-group">
+          <label class="form-label">Update GPS</label>
+          <div class="gps-row">
+            <div class="gps-status" id="edit-gps-status">
+              <i class="fas fa-map-marker-alt"></i> Current GPS loaded
+            </div>
+            <button type="button" id="edit-gps-btn" class="btn btn-secondary" onclick="captureEditGPS()" style="flex-shrink:0;white-space:nowrap">
+              <i class="fas fa-crosshairs"></i> Re-Capture
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Address *</label>
+          <input id="edit-address" type="text" class="form-input" />
+        </div>
+      </div>
+
+      <!-- Details -->
+      <div class="form-section">
+        <div class="form-section-title"><i class="fas fa-tag"></i> Sign Details</div>
+        <div class="form-group">
+          <label class="form-label">Sign Type</label>
+          <select id="edit-sign-type" class="form-select"></select>
+        </div>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label">Date Installed</label>
+            <input id="edit-date" type="date" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Installer Name</label>
+            <input id="edit-installer" type="text" class="form-input" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea id="edit-notes" class="form-textarea"></textarea>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full">
+        <i class="fas fa-save"></i> Save Changes
+      </button>
+      <button type="button" class="btn btn-secondary btn-full" onclick="openDetail(App.editSignId)" style="margin-top:8px">
+        <i class="fas fa-times"></i> Cancel
+      </button>
+    </form>
+  </div>
+
+  <!-- ====== ADMIN SCREEN ====== -->
+  <div id="admin-screen" class="screen">
+    <div class="screen-header">
+      <h1><i class="fas fa-shield-alt" style="color:var(--gold)"></i> Admin Panel</h1>
+      <div class="sub">Reilly's Guns — Internal Records Management</div>
+    </div>
+    <div class="admin-content">
+
+      <!-- Admin Stats -->
+      <div class="admin-stat-grid">
+        <div class="stat-card total-card">
+          <div class="stat-number" id="admin-total">0</div>
+          <div class="stat-label">Total Signs</div>
+        </div>
+        <div class="stat-card active-card">
+          <div class="stat-number" id="admin-active">0</div>
+          <div class="stat-label">Active</div>
+        </div>
+        <div class="stat-card removed-card" style="grid-column:1/-1">
+          <div class="stat-number" id="admin-removed">0</div>
+          <div class="stat-label">Removed</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="admin-filter-bar">
+        <select id="admin-status-filter" onchange="applyAdminFilter()">
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="removed">Removed</option>
+        </select>
+        <select id="admin-type-filter" onchange="applyAdminFilter()">
+          <option value="">All Types</option>
+          <option value="inherited">Inherited Firearms</option>
+          <option value="general">General Promotion</option>
+          <option value="upcoming">Upcoming Event</option>
+          <option value="event">Sale Event</option>
+          <option value="sale">Special Offer</option>
+          <option value="custom">Other / Custom</option>
+        </select>
+        <button class="btn btn-gold btn-sm" onclick="exportCSV()"><i class="fas fa-download"></i> CSV</button>
+      </div>
+
+      <!-- Table -->
+      <div class="admin-table-wrap admin-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>#</th><th>Address</th><th>Type</th><th>Status</th><th>Date</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="admin-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== BOTTOM NAV ====== -->
+  <nav class="bottom-nav" id="main-nav" style="display:none;">
+    <button class="nav-item" data-screen="dashboard" onclick="showScreen('dashboard')">
+      <i class="fas fa-tachometer-alt"></i><span>Dashboard</span>
+    </button>
+    <button class="nav-item" data-screen="map" onclick="showScreen('map')">
+      <i class="fas fa-map"></i><span>Map</span>
+    </button>
+    <button class="nav-item" data-screen="list" onclick="showScreen('list')">
+      <i class="fas fa-list"></i><span>Signs</span>
+    </button>
+    <button class="nav-item admin-only" data-screen="admin" onclick="showScreen('admin')" style="display:none">
+      <i class="fas fa-shield-alt"></i><span>Admin</span>
+    </button>
+  </nav>
+
+</div><!-- /#app -->
+
+<script src="js/app.js"></script>
+</body>
+</html>
